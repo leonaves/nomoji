@@ -61,8 +61,11 @@ export default function Home() {
 
   // Initialize game on mount
   useEffect(() => {
+    console.log('Nomoji: useEffect running, initializing game...');
     const initGame = (round: number): void => {
+      console.log('Nomoji: initGame called with round', round);
       const data = loadGameData(round);
+      console.log('Nomoji: loadGameData returned', data);
       setGameData(data);
       setCurrentRound(round);
 
