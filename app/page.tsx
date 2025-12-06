@@ -5,6 +5,29 @@ import { AnimatedEmoji } from '@/components/AnimatedEmoji';
 import { GuessButtons } from '@/components/GuessButtons';
 import { Timer } from '@/components/Timer';
 import { ResultsScreen } from '@/components/ResultsScreen';
+import { generateSeededGameEmojis } from '@/lib/emoji-generator';
+
+const TOTAL_ROUNDS = 3;
+
+function getDateSeed(): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today.toISOString().split('T')[0];
+}
+
+function loadGameData(round: number) {
+  const seed = getDateSeed();
+  const { allThreeEmojis, displayEmojis, missingEmoji } = generateSeededGameEmojis(seed, round);
+  return {
+    gameId: `${seed}-${round}`,
+    date: seed,
+    round,
+    totalRounds: TOTAL_ROUNDS,
+    emojis: allThreeEmojis,
+    displayEmojis,
+    missingEmoji,
+  };
+}
 
 interface GameData {
   gameId: string;
@@ -13,6 +36,7 @@ interface GameData {
   totalRounds: number;
   emojis: string[];
   displayEmojis: string[];
+  missingEmoji: string;
 }
 
 interface RoundResult {
@@ -54,9 +78,8 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [gameData, startTime, showResults, gameStarted]);
 
-  const loadGame = async (round: number) => {
-    const response = await fetch(`/api/daily-game?round=${round}`);
-    const data = await response.json();
+  const loadGame = (round: number) => {
+    const data = loadGameData(round);
     setGameData(data);
     setCurrentRound(round);
 
@@ -112,7 +135,7 @@ export default function Home() {
     setStartTime(Date.now());
   };
 
-  const handleGuess = async (emoji: string) => {
+  const handleGuess = (emoji: string) => {
     if (!gameData) return;
 
     const newGuesses = [...guesses, emoji];
@@ -120,31 +143,21 @@ export default function Home() {
 
     const elapsed = Date.now() - startTime;
 
-    const response = await fetch('/api/submit-guess', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        gameId: gameData.gameId,
-        gameType: 'DAILY',
-        selectedEmoji: emoji,
-      }),
-    });
+    const success = emoji === gameData.missingEmoji;
 
-    const result = await response.json();
+    setCorrectAnswer(gameData.missingEmoji);
+    setIsSuccess(success);
 
-    setCorrectAnswer(result.correctAnswer);
-    setIsSuccess(result.isSuccess);
-
-    if (result.isSuccess || newGuesses.length >= 2) {
-      const finalTimeMs = result.isSuccess ? elapsed : null;
+    if (success || newGuesses.length >= 2) {
+      const finalTimeMs = success ? elapsed : null;
       setTimeMs(finalTimeMs);
       setShowResults(true);
 
       // Save this round's result
       const roundResult: RoundResult = {
-        isSuccess: result.isSuccess,
+        isSuccess: success,
         timeMs: finalTimeMs,
-        correctAnswer: result.correctAnswer,
+        correctAnswer: gameData.missingEmoji,
         guesses: newGuesses,
       };
 
@@ -165,7 +178,7 @@ export default function Home() {
     }
   };
 
-  const handleNextRound = async () => {
+  const handleNextRound = () => {
     if (!gameData || currentRound >= gameData.totalRounds) return;
 
     setShowResults(false);
@@ -176,8 +189,7 @@ export default function Home() {
 
     // Load next round
     const nextRound = currentRound + 1;
-    const response = await fetch(`/api/daily-game?round=${nextRound}`);
-    const data = await response.json();
+    const data = loadGameData(nextRound);
     setGameData(data);
     setCurrentRound(nextRound);
     setStartTime(Date.now());
