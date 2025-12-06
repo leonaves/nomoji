@@ -59,8 +59,61 @@ export default function Home() {
   const [roundResults, setRoundResults] = useState<RoundResult[]>([]);
   const [allRoundsComplete, setAllRoundsComplete] = useState(false);
 
+  // Initialize game on mount
   useEffect(() => {
-    loadGame(1);
+    const initGame = (round: number): void => {
+      const data = loadGameData(round);
+      setGameData(data);
+      setCurrentRound(round);
+
+      // Check if all rounds are already completed for today
+      const dailyResultsKey = `nomoji_daily_results_${data.date}`;
+      const savedResults = localStorage.getItem(dailyResultsKey);
+
+      if (savedResults) {
+        try {
+          const results: RoundResult[] = JSON.parse(savedResults);
+          if (results.length >= data.totalRounds) {
+            // All rounds completed - show final results
+            setRoundResults(results);
+            setAllRoundsComplete(true);
+            setGameStarted(true);
+            setShowResults(true);
+            return;
+          } else if (results.length >= round) {
+            // This round is already completed, load next incomplete round
+            setRoundResults(results);
+            initGame(results.length + 1);
+            return;
+          } else {
+            // Some rounds done, continue from where we left off
+            setRoundResults(results);
+          }
+        } catch {
+          // Invalid saved data, ignore
+        }
+      }
+
+      // Check if there's a saved timer for this game (means game was in progress)
+      const savedTimer = localStorage.getItem('nomoji_daily_timer');
+      if (savedTimer) {
+        try {
+          const { gameId, elapsedMs } = JSON.parse(savedTimer);
+          if (gameId === data.gameId) {
+            setStartTime(Date.now() - elapsedMs);
+            setGameStarted(true);
+            return;
+          }
+        } catch {
+          // Invalid saved data, ignore
+        }
+      }
+
+      // New game - don't start timer yet, wait for user to click start
+      localStorage.removeItem('nomoji_daily_timer');
+    };
+
+    initGame(1);
   }, []);
 
   // Save elapsed time to localStorage every second
@@ -77,58 +130,6 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [gameData, startTime, showResults, gameStarted]);
-
-  const loadGame = (round: number) => {
-    const data = loadGameData(round);
-    setGameData(data);
-    setCurrentRound(round);
-
-    // Check if all rounds are already completed for today
-    const dailyResultsKey = `nomoji_daily_results_${data.date}`;
-    const savedResults = localStorage.getItem(dailyResultsKey);
-
-    if (savedResults) {
-      try {
-        const results: RoundResult[] = JSON.parse(savedResults);
-        if (results.length >= data.totalRounds) {
-          // All rounds completed - show final results
-          setRoundResults(results);
-          setAllRoundsComplete(true);
-          setGameStarted(true);
-          setShowResults(true);
-          return;
-        } else if (results.length >= round) {
-          // This round is already completed, load next incomplete round
-          setRoundResults(results);
-          loadGame(results.length + 1);
-          return;
-        } else {
-          // Some rounds done, continue from where we left off
-          setRoundResults(results);
-        }
-      } catch (e) {
-        // Invalid saved data, ignore
-      }
-    }
-
-    // Check if there's a saved timer for this game (means game was in progress)
-    const savedTimer = localStorage.getItem('nomoji_daily_timer');
-    if (savedTimer) {
-      try {
-        const { gameId, elapsedMs } = JSON.parse(savedTimer);
-        if (gameId === data.gameId) {
-          setStartTime(Date.now() - elapsedMs);
-          setGameStarted(true);
-          return;
-        }
-      } catch (e) {
-        // Invalid saved data, ignore
-      }
-    }
-
-    // New game - don't start timer yet, wait for user to click start
-    localStorage.removeItem('nomoji_daily_timer');
-  };
 
   const handleStartGame = () => {
     setGameStarted(true);
